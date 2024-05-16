@@ -2,6 +2,7 @@ import time
 import socket
 import os
 import json
+import logging
 
 from threading import Thread, Lock
 
@@ -33,14 +34,15 @@ class LeaseContext:
 " class LeaseClient
 """
 class LeaseClient(ClientBase):
-    def __init__(self, name: str):
+    def __init__(self, communicator, name: str, logger: logging.Logger = None):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
         self.__name = name + "_lease"
         self.__contextName = socket.gethostname() + "/" + name + "/" + str(os.getpid())
         self.__context = LeaseContext()
         self.__thread = None
         self.__lock = Lock()
-        super().__init__(self.__name)
-        print("[LeaseClient] lease name:", self.__name, ", context name:", self.__contextName)
+        super().__init__(communicator, self.__name)
+        self.logger.debug(f"[LeaseClient] lease name: {self.__name}, context name: {self.__contextName}")
     
     def Init(self):
         self.SetTimeout(1.0)
@@ -69,7 +71,7 @@ class LeaseClient(ClientBase):
 
         c, d = self._CallBase(RPC_API_ID_LEASE_APPLY, p)
         if c != 0:
-            print("[LeaseClient] apply lease error. code:", c)
+            self.logger.error(f"[LeaseClient] apply lease error. code: {c}")
             return
 
         data = json.loads(d)
@@ -77,7 +79,7 @@ class LeaseClient(ClientBase):
         id = data["id"]
         term = data["term"]
 
-        print("[LeaseClient] lease applied id:", id, ", term:", term)
+        self.logger.debug(f"[LeaseClient] lease applied id: {id}, term: {term}")
 
         with self.__lock:
             self.__context.Update(id, float(term/1000000))
@@ -88,7 +90,7 @@ class LeaseClient(ClientBase):
 
         c, d = self._CallBase(RPC_API_ID_LEASE_RENEWAL, p, 0, self.__context.id)
         if c != 0:
-            print("[LeaseClient] renewal lease error. code:", c)
+            self.logger.error(f"[LeaseClient] renewal lease error. code: {c}")
             if c == RPC_ERR_SERVER_LEASE_NOT_EXIST:
                 with self.__lock:
                     self.__context.Reset()

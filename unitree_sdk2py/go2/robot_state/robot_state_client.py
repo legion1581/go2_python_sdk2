@@ -1,8 +1,9 @@
 import json
 
 from ...rpc.client import Client
-from ...rpc.client_internal import *
 from .robot_state_api import *
+
+import logging
 
 
 """
@@ -18,9 +19,13 @@ class ServiceState:
 " class RobotStateClient
 """
 class RobotStateClient(Client):
-    def __init__(self):
-        super().__init__(ROBOT_STATE_SERVICE_NAME, False)
+    default_service_name = ROBOT_STATE_SERVICE_NAME
 
+    def __init__(self, logger: logging.Logger = None, *args, **kwargs):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+        super().__init__(self.service_name, enabaleLease=False, logger=self.logger)
+        
+    
     def Init(self):
         # set api version
         self._SetApiVerson(ROBOT_STATE_API_VERSION)

@@ -1,4 +1,5 @@
 from enum import Enum
+from .topics import DDS_TOPICS, WEBRTC_TOPICS
 
 """
 " Enum ChannelType
@@ -10,7 +11,7 @@ class ChannelType(Enum):
 """
 " function GetClientChannelName
 """
-def GetClientChannelName(serviceName: str, channelType: ChannelType):
+def GetClientReqResChannelName(channel_name: str, serviceName: str, channelType: ChannelType):
     name = "rt/api/" + serviceName
     
     if channelType == ChannelType.SEND:
@@ -18,12 +19,18 @@ def GetClientChannelName(serviceName: str, channelType: ChannelType):
     else:
         name += "/response"
 
-    return name
+    if channel_name == 'DDS':
+        return name
+    elif channel_name == 'WEBRTC':
+        if serviceName in WEBRTC_TOPICS:
+            return name
+        else: 
+            raise ValueError(f"WEBRTC doesnt support this topic: {name}")
 
 """
 " function GetClientChannelName
 """
-def GetServerChannelName(serviceName: str, channelType: ChannelType):
+def GetServerReqResChannelName(channel_name: str, serviceName: str, channelType: ChannelType):
     name = "rt/api/" + serviceName
     
     if channelType == ChannelType.SEND:
@@ -31,4 +38,10 @@ def GetServerChannelName(serviceName: str, channelType: ChannelType):
     else:
         name += "/request"
 
-    return name
+    if channel_name == 'DDS':
+        return name
+    elif channel_name == 'WEBRTC':
+        if serviceName in WEBRTC_TOPICS:
+            return name
+        else: 
+            raise ValueError(f"WEBRTC doesnt support this topic: {name}")

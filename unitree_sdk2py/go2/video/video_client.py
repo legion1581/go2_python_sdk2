@@ -3,15 +3,19 @@ import json
 from ...rpc.client import Client
 from .video_api import *
 
+import logging
 
 """
 " class VideoClient
 """
 class VideoClient(Client):
-    def __init__(self):
-        super().__init__(VIDEO_SERVICE_NAME, False)
-
-
+    default_service_name = VIDEO_SERVICE_NAME
+    
+    def __init__(self, communicator, logger: logging.Logger = None, *args, **kwargs):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+        self.service_name = VideoClient.default_service_name
+        super().__init__(communicator=communicator, serviceName=self.service_name, enabaleLease=False, logger=self.logger)
+    
     def Init(self):
         # set api version
         self._SetApiVerson(VIDEO_API_VERSION)

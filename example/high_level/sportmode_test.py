@@ -1,18 +1,26 @@
+import math
 import time
 import sys
-from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactortyInitialize
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__SportModeState_
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import SportModeState_
+from unitree_sdk2py.core.dds.channel import DDSChannelSubscriber, DDSChannelFactoryInitialize
+
 from unitree_sdk2py.go2.sport.sport_client import (
     SportClient,
     PathPoint,
     SPORT_PATH_POINT_SIZE,
 )
-import math
+
+from unitree_sdk2py.idl.idl_dataclass import IDLDataClass
+from unitree_sdk2py.utils.logger import setup_logging
+from unitree_sdk2py.sdk.sdk import create_standard_sdk
+
+
+idl_data_class = IDLDataClass()
+
+SportModeState_ = idl_data_class.get_data_class('SportModeState_')
 
 
 class SportModeTest:
-    def __init__(self) -> None:
+    def __init__(self, robot) -> None:
         # Time count
         self.t = 0
         self.dt = 0.01
@@ -22,8 +30,8 @@ class SportModeTest:
         self.py0 = 0
         self.yaw0 = 0
 
-        self.client = SportClient()  # Create a sport client
-        self.client.SetTimeout(10.0)
+        self.client: SportClient = robot.ensure_client(SportClient.default_service_name, enableLease=True)
+        self.client.SetTimeout(2.0)
         self.client.Init()
 
     def GetInitState(self, robot_state: SportModeState_):
@@ -112,23 +120,39 @@ class SportModeTest:
 
 
 # Robot state
-robot_state = unitree_go_msg_dds__SportModeState_()
+robot_state = idl_data_class.create_zeroed_dataclass(SportModeState_)
 def HighStateHandler(msg: SportModeState_):
     global robot_state
     robot_state = msg
 
 
 if __name__ == "__main__":
-    if len(sys.argv)>1:
-        ChannelFactortyInitialize(0, sys.argv[1])
+
+    if len(sys.argv) > 1:
+        network_interface = sys.argv[1]
     else:
-        ChannelFactortyInitialize(0)
-        
-    sub = ChannelSubscriber("rt/sportmodestate", SportModeState_)
+        network_interface = None
+    
+    # Set up a logger with verbose output enabled. This allows for detailed logging output which can be useful for debugging.
+    setup_logging(verbose=True)
+
+    # Initialize the SDK with a custom name, which is used to identify the SDK instance and its associated logs.
+    sdk = create_standard_sdk('UnitreeGo2SDK')
+
+    # Create a robot instance using the DDS protocol. 
+    # `domainId=0` is used as it is currently the standard for all Go2 robots, although a script to change this on the robot is planned.
+    # `interface="eth0"` specifies the network interface the DDS should use.
+    # Each robot is uniquely identified by a serial number, allowing for multiple robots to be managed by the SDK.
+    # Check if the network interface argument is provided
+
+    communicator = DDSChannelFactoryInitialize(domainId=0, networkInterface=network_interface)
+    robot = sdk.create_robot(communicator, serialNumber='B42D2000XXXXXXXX')
+      
+    sub = DDSChannelSubscriber("rt/sportmodestate", SportModeState_)
     sub.Init(HighStateHandler, 10)
     time.sleep(1)
 
-    test = SportModeTest()
+    test = SportModeTest(robot)
     test.GetInitState(robot_state)
 
     print("Start test !!!")
@@ -136,9 +160,9 @@ if __name__ == "__main__":
         test.t += test.dt
 
         test.StandUpDown()
-        # test.VelocityMove()
-        # test.BalanceAttitude()
-        # test.TrajectoryFollow()
-        # test.SpecialMotions()
+        test.VelocityMove()
+        test.BalanceAttitude()
+        test.TrajectoryFollow()
+        test.SpecialMotions()
 
         time.sleep(test.dt)

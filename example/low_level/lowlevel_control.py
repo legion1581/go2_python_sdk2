@@ -1,30 +1,51 @@
 import time
 import sys
 
-from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactortyInitialize
-from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactortyInitialize
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_
+from unitree_sdk2py.core.dds.channel import DDSChannelPublisher, DDSChannelFactoryInitialize
 from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.utils.thread import Thread
 import unitree_legged_const as go2
+
+from unitree_sdk2py.idl.idl_dataclass import IDLDataClass
+from unitree_sdk2py.utils.logger import setup_logging
+from unitree_sdk2py.sdk.sdk import create_standard_sdk
+
+
+idl_data_class = IDLDataClass()
+LowCmd_ = idl_data_class.get_data_class('LowCmd_')
 
 crc = CRC()
 
 if __name__ == '__main__':
 
-    if len(sys.argv)>1:
-        ChannelFactortyInitialize(0, sys.argv[1])
+    if len(sys.argv) > 1:
+        network_interface = sys.argv[1]
     else:
-        ChannelFactortyInitialize(0)
+        network_interface = None
+    
+    # Set up a logger with verbose output enabled. This allows for detailed logging output which can be useful for debugging.
+    setup_logging(verbose=True)
+
+    # Initialize the SDK with a custom name, which is used to identify the SDK instance and its associated logs.
+    sdk = create_standard_sdk('UnitreeGo2SDK')
+
+    # Create a robot instance using the DDS protocol. 
+    # `domainId=0` is used as it is currently the standard for all Go2 robots, although a script to change this on the robot is planned.
+    # `interface="eth0"` specifies the network interface the DDS should use.
+    # Each robot is uniquely identified by a serial number, allowing for multiple robots to be managed by the SDK.
+    # Check if the network interface argument is provided
+
+    communicator = DDSChannelFactoryInitialize(domainId=0, networkInterface=network_interface)
+    robot = sdk.create_robot(communicator, serialNumber='B42D2000XXXXXXXX')
+
     # Create a publisher to publish the data defined in UserData class
-    pub = ChannelPublisher("rt/lowcmd", LowCmd_)
+    pub = DDSChannelPublisher("rt/lowcmd", LowCmd_)
     pub.Init()
     
-    cmd = unitree_go_msg_dds__LowCmd_()
+    cmd = idl_data_class.create_zeroed_dataclass(LowCmd_)
     cmd.head[0]=0xFE
     cmd.head[1]=0xEF
-    cmd.level_flag = 0xFF
+    cmd.level_flag = go2.LOWLEVEL
     cmd.gpio = 0
     for i in range(20):
         cmd.motor_cmd[i].mode = 0x01  # (PMSM) mode
@@ -53,8 +74,8 @@ if __name__ == '__main__':
 
         #Publish message
         if pub.Write(cmd):
-            print("Publish success. msg:", cmd.crc)
+            robot.logger.info(f"Publish success. crc: {cmd.crc}")
         else:
-            print("Waitting for subscriber.")
+            robot.logger.info("Waitting for subscriber.")
 
         time.sleep(0.002)

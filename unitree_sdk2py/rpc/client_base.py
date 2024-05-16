@@ -10,22 +10,24 @@ from ..utils.future import FutureResult
 
 from .client_stub import ClientStub
 from .internal import *
+import logging
 
 
 """
 " class ClientBase
 """
 class ClientBase:
-    def __init__(self, serviceName: str):
+    def __init__(self, comminicator, serviceName: str, logger: logging.Logger = None):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
         self.__timeout = 1.0
-        self.__stub = ClientStub(serviceName)
+        self.__stub = ClientStub(comminicator, serviceName, self.logger)
         self.__stub.Init()
 
     def SetTimeout(self, timeout: float):
         self.__timeout = timeout
 
     def _CallBase(self, apiId: int, parameter: str, proirity: int = 0, leaseId: int = 0):
-        # print("[CallBase] call apiId:", apiId, ", proirity:", proirity, ", leaseId:", leaseId)
+        # self.logger.info("[CallBase] call apiId:", apiId, ", proirity:", proirity, ", leaseId:", leaseId)
         header = self.__SetHeader(apiId, leaseId, proirity, False)
         request = Request(header, parameter, [])
 

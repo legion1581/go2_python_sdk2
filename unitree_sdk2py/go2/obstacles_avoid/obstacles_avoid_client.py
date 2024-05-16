@@ -3,13 +3,18 @@ import json
 from ...rpc.client import Client
 from .obstacles_avoid_api import *
 
+import logging
 
 """
 " class ObstaclesAvoidClient
 """
 class ObstaclesAvoidClient(Client):
-    def __init__(self):
-        super().__init__(OBSTACLES_AVOID_SERVICE_NAME, False)
+    default_service_name = OBSTACLES_AVOID_SERVICE_NAME
+
+    def __init__(self, communicator, logger: logging.Logger = None, *args, **kwargs):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+        self.service_name = ObstaclesAvoidClient.default_service_name
+        super().__init__(communicator=communicator, serviceName=self.service_name, enabaleLease=False, logger=self.logger)
 
     def Init(self):
         # set api version

@@ -15,9 +15,13 @@ from cyclonedds.internal import dds_c_t, InvalidSample
 # for channel config
 from .channel_config import ChannelConfigAutoDetermine, ChannelConfigHasInterface
 
+from ...idl.idl_dataclass import IDLDataClass
+
 # for singleton
-from ..utils.singleton import Singleton
-from ..utils.bqueue import BQueue
+from ...utils.singleton import Singleton
+from ...utils.bqueue import BQueue
+
+import logging
 
 
 """
@@ -27,13 +31,14 @@ from ..utils.bqueue import BQueue
 """
 " class Channel
 """
-class Channel:
+class DDSChannel:
     
     """
     " internal class __Reader
     """
     class __Reader:
-        def __init__(self):
+        def __init__(self, logger: logging.Logger = None):
+            self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
             self.__reader = None
             self.__handler = None
             self.__queue = None
@@ -62,11 +67,11 @@ class Channel:
                 else:
                     sample = self.__reader.take_one(timeout=duration(seconds=timeout))
             except DDSException as e:
-                print("[Reader] catch DDSException msg:", e.msg)
+                self.logger.error("[Reader] catch DDSException msg:", e.msg)
             except TimeoutError as e:
-                print("[Reader] take sample timeout")
+                self.logger.error("[Reader] take sample timeout")
             except:
-                print("[Reader] take sample error")
+                self.logger.error("[Reader] take sample error")
 
             return sample
 
@@ -85,13 +90,13 @@ class Channel:
             try:
                 samples = reader.take(1)
             except DDSException as e:
-                print("[Reader] catch DDSException error. msg:", e.msg)
+                self.logger.error("[Reader] catch DDSException error. msg:", e.msg)
                 return
             except TimeoutError as e:
-                print("[Reader] take sample timeout")
+                self.logger.error("[Reader] take sample timeout")
                 return
             except:
-                print("[Reader] take sample error")
+                self.logger.error("[Reader] take sample error")
                 return
 
             if samples is None:
@@ -118,7 +123,8 @@ class Channel:
     " internal class __Writer
     """
     class __Writer:
-        def __init__(self):
+        def __init__(self, logger: logging.Logger = None):
+            self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
             self.__writer = None
             self.__publication_matched_count = 0
         
@@ -133,19 +139,21 @@ class Channel:
             while waitsec > 0.0 and self.__publication_matched_count == 0:
                 time.sleep(0.1)
                 waitsec = waitsec - 0.1
-            #   print(time.time())
+                # self.logger.debug(time.time())
 
             # check waitsec
             if timeout is not None and waitsec <= 0.0:
+                # self.logger.debug("Write Timeout")
                 return False
 
+            # self.logger.debug(f"DDS data to write: {sample}")
             try:
                 self.__writer.write(sample)
             except DDSException as e:
-                print("[Writer] catch DDSException error. msg:", e.msg)
+                self.logger.error("[Writer] catch DDSException error. msg:", e.msg)
                 return False
             except Exception as e:
-                print("[Writer] write sample error. msg:", e.args())
+                self.logger.error("[Writer] write sample error. msg:", e.args())
                 return False
 
             return True
@@ -159,9 +167,10 @@ class Channel:
 
 
     # channel __init__
-    def __init__(self, participant: DomainParticipant, name: str, type: Any, qos: Qos = None):
-        self.__reader = self.__Reader()
-        self.__writer = self.__Writer()
+    def __init__(self, participant: DomainParticipant, name: str, type: Any, qos: Qos = None, logger: logging.Logger = None):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+        self.__reader = self.__Reader(self.logger)
+        self.__writer = self.__Writer(self.logger)
         self.__participant = participant
         self.__topic = Topic(self.__participant, name, type, qos)
 
@@ -187,13 +196,16 @@ class Channel:
 """
 " class ChannelFactory
 """
-class ChannelFactory(Singleton):
+class DDSChannelFactory(Singleton):
+    channel_name = 'DDS'
     __domain = None
     __participant = None
     __qos = None
 
-    def __init__(self):
+    def __init__(self, logger: logging.Logger = None):
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
         super().__init__()
+        self.dataclass = IDLDataClass()
 
     def Init(self, id: int, networkInterface: str = None, qos: Qos = None):
         config = None
@@ -206,19 +218,19 @@ class ChannelFactory(Singleton):
         try:
             self.__domain = Domain(id, config)
         except DDSException as e:
-            print("[ChannelFactory] create domain error. msg:", e.msg)
+            self.logger.error("[ChannelFactory] create domain error. msg:", e.msg)
             return False
         except:
-            print("[ChannelFactory] create domain error.")
+            self.logger.error("[ChannelFactory] create domain error.")
             return False
 
         try:
             self.__participant = DomainParticipant(id)
         except DDSException as e:
-            print("[ChannelFactory] create domain participant error. msg:", e.msg)
+            self.logger.error("[ChannelFactory] create domain participant error. msg:", e.msg)
             return False
         except:
-            print("[ChannelFactory] create domain participant error")
+            self.logger.error("[ChannelFactory] create domain participant error")
             return False
 
         self.__qos = qos
@@ -226,7 +238,7 @@ class ChannelFactory(Singleton):
         return True
 
     def CreateChannel(self, name: str, type: Any):
-        return Channel(self.__participant, name, type, self.__qos)
+        return DDSChannel(self.__participant, name, type, self.__qos, self.logger)
 
     def CreateSendChannel(self, name: str, type: Any):
         channel = self.CreateChannel(name, type)
@@ -242,9 +254,9 @@ class ChannelFactory(Singleton):
 """
 " class ChannelPublisher
 """
-class ChannelPublisher:
+class DDSChannelPublisher:
     def __init__(self, name: str, type: Any):
-        factory = ChannelFactory()
+        factory = DDSChannelFactory()
         self.__channel = factory.CreateChannel(name, type)
         self.__inited = False
 
@@ -263,9 +275,9 @@ class ChannelPublisher:
 """
 " class ChannelSubscriber
 """
-class ChannelSubscriber:
+class DDSChannelSubscriber:
     def __init__(self, name: str, type: Any):
-        factory = ChannelFactory()
+        factory = DDSChannelFactory()
         self.__channel = factory.CreateChannel(name, type)
         self.__inited = False
 
@@ -282,9 +294,10 @@ class ChannelSubscriber:
         return self.__channel.Read(timeout)
 
 """
-" function ChannelFactortyInitialize. used to intialize channel everenment.
+" function ChannelFactoryInitialize. used to intialize channel everenment.
 """
-def ChannelFactortyInitialize(id: int = 0, networkInterface: str = None):
-    factory = ChannelFactory()
-    if not factory.Init(id, networkInterface):
+def DDSChannelFactoryInitialize(domainId: int = 0, networkInterface: str = None):
+    factory = DDSChannelFactory()
+    if not factory.Init(domainId, networkInterface):
         raise Exception("channel factory init error.")
+    return factory

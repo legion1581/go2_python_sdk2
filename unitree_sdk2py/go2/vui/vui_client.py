@@ -2,14 +2,19 @@ import json
 
 from ...rpc.client import Client
 from .vui_api import *
+import logging
 
 
 """
 " class VideoClient
 """
 class VuiClient(Client):
-    def __init__(self):
-        super().__init__(VUI_SERVICE_NAME, False)
+    default_service_name = VUI_SERVICE_NAME
+
+    def __init__(self, communicator, logger: logging.Logger = None, *args, **kwargs):
+        self.service_name = VuiClient.default_service_name
+        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+        super().__init__(communicator=communicator, serviceName=self.service_name, enabaleLease=False, logger=self.logger)
 
     def Init(self):
         # set api version

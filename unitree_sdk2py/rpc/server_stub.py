@@ -8,7 +8,7 @@ from ..utils.bqueue import BQueue
 from ..idl.unitree_api.msg.dds_ import Request_ as Request
 from ..idl.unitree_api.msg.dds_ import Response_ as Response
 
-from ..core.channel import ChannelFactory
+from ..core.dds.channel import ChannelFactory
 from ..core.channel_name import ChannelType, GetServerChannelName
 
 
