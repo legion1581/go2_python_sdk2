@@ -22,7 +22,7 @@ class ClientStub:
         self.__communicator = communicator
 
     def Init(self):
-        factory = self.__communicator
+        factory = self.__communicator.ChannelFactory()
         self.__futureQueue = RequestFutureQueue()
 
         self.Request = factory.dataclass.get_data_class('Request_')

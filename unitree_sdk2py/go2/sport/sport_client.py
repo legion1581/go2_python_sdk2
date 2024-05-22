@@ -85,6 +85,9 @@ class SportClient(Client):
         self._RegistApi(SPORT_API_ID_ONESIDEDSTEP, 0)
         self._RegistApi(SPORT_API_ID_BOUND, 0)
 
+        self._RegistApi(SPORT_API_ID_STANDOUT, 0)
+        self._RegistApi(SPORT_API_ID_AUTO_ROLL_RECOVERY, 0)
+
     # 1001
     def Damp(self):
         p = {}
@@ -412,3 +415,37 @@ class SportClient(Client):
         parameter = json.dumps(p)
         code, data = self._Call(SPORT_API_ID_BOUND, parameter)
         return code
+    
+    #below API only works while in ai mode
+    #1038
+    def AutoSwitchMoveMode(self, on: bool):
+        p = {}
+        p["data"] = on
+        parameter = json.dumps(p)
+        code, data = self._Call(SPORT_API_ID_AUTO_SWITCH_MOVE_MODE, parameter)
+        return code
+    
+    #1039
+    def StandOut(self):
+        p = {}
+        parameter = json.dumps(p)
+        code, data = self._Call(SPORT_API_ID_STANDOUT, parameter)
+        return code
+    
+    #1040
+    def SetAutoRollrecovery(self, on: bool):
+        p = {}
+        p["data"] = on
+        parameter = json.dumps(p)
+        code, data = self._Call(SPORT_API_ID_SET_AUTO_ROLL_RECOVERY, parameter)
+        return code
+    
+    #1041
+    def GetAutoRollrecovery(self):
+        p = {}
+        parameter = json.dumps(p)
+        code, data = self._Call(SPORT_API_ID_GET_AUTO_ROLL_RECOVERY, parameter)
+        if code == 0:
+            return code, json.loads(data)
+        else:
+            return code, None

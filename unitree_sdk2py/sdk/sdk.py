@@ -6,6 +6,8 @@ from ..go2.robot_state.robot_state_client import RobotStateClient
 from ..go2.video.video_client import VideoClient
 from ..go2.vui.vui_client import VuiClient
 from ..go2.motion_switcher.motion_switcher_client import MotionSwitcherClient
+from ..go2.audiohub.audiohub_client import AudioHubClient
+from ..go2.gpt.gpt_client import GPTClient
 
 __LOGGER = logging.getLogger(__name__)
 
@@ -24,8 +26,8 @@ _DEFAULT_SERVICE_CLIENTS = [
     # WebRTCClient, 
     # SLAMClient,
     # ArmClient, 
-    # ChatGPTClient, !
-    # AudioClient, !
+    GPTClient,
+    AudioHubClient,
     VideoClient 
     # NetworkClient
 ]

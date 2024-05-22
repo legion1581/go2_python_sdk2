@@ -9,7 +9,6 @@ import logging
 class Client(ClientBase):
     def __init__(self, communicator, serviceName: str, enabaleLease: bool = False, logger: logging.Logger = None):
         self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
-        self.logger.info(f"serviceName: {serviceName}")
         super().__init__(communicator, serviceName, self.logger)
 
         self.__apiMapping = {}

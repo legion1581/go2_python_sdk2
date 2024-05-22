@@ -26,6 +26,8 @@ class VuiClient(Client):
         self._RegistApi(VUI_API_ID_GETVOLUME, 0)
         self._RegistApi(VUI_API_ID_SETBRIGHTNESS, 0)
         self._RegistApi(VUI_API_ID_GETBRIGHTNESS, 0)
+        self._RegistApi(VUI_API_ID_LED_SET, 0)
+        self._RegistApi(VUI_API_ID_LED_QUIT, 0)
 
     # 1001
     def SetSwitch(self, enable: int):
@@ -89,3 +91,21 @@ class VuiClient(Client):
             return code, d["brightness"]
         else:
             return code, None
+    
+    # 1007
+    def SetLed(self, color: VUI_COLOR, time=5, flash_cycle=None):
+        p = {}
+        p["color"] = color
+        p["time"] = time
+        if flash_cycle:
+            p["flash_cycle"] = flash_cycle
+        parameter = json.dumps(p)
+        code, data = self._Call(VUI_API_ID_LED_SET, parameter)
+        return code
+    
+    # 1008
+    def QuitLed(self, level: int):
+        p = {}
+        parameter = json.dumps(p)
+        code, data = self._Call(VUI_API_ID_LED_QUIT, parameter)
+        return code

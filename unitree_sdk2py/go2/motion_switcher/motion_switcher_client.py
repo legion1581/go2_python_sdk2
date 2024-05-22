@@ -27,7 +27,7 @@ class MotionSwitcherClient(Client):
         self._RegistApi(MOTION_SWITCHER_API_ID_SET_SILENT, 0)
 
     # 1001
-    # Get current sport mode: normal or advanced
+    # Get current sport mode: normal or advanced or ai
     def GetMode(self):
         p = {}
         parameter = json.dumps(p)
@@ -35,7 +35,7 @@ class MotionSwitcherClient(Client):
         return code
 
     # 1002
-    # Set current sport mode: normal or advanced
+    # Set current sport mode: normal or advanced or ai
     def SetMode(self, mode: str):
         p = {}
         p["name"] = mode
@@ -44,7 +44,7 @@ class MotionSwitcherClient(Client):
         return code
     
     # 1003
-    # Disables both services: advanced and normal
+    # Disables both services: advanced and normal and ai
     # If flag set to True then dumps imediatly, otherwise does a soft StandDown movement
     def ReleaseMode(self, flag: bool):
         p = {}

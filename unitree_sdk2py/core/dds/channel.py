@@ -25,279 +25,280 @@ import logging
 
 
 """
-" class ChannelReader
+" class DDSCommunicator
 """
-
-"""
-" class Channel
-"""
-class DDSChannel:
-    
+class DDSCommunicator(Singleton):
     """
-    " internal class __Reader
+    " class Channel
     """
-    class __Reader:
-        def __init__(self, logger: logging.Logger = None):
-            self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
-            self.__reader = None
-            self.__handler = None
-            self.__queue = None
-            self.__queueEnable = False
-            self.__threadEvent = None
-            self.__threadReader = None
+    class Channel:
         
-        def Init(self, participant: DomainParticipant, topic: Topic, qos: Qos = None, handler: Callable = None, queueLen: int = 0):
-            if handler is None:
-                self.__reader = DataReader(participant, topic, qos)
-            else:
-                self.__handler = handler
-                if queueLen > 0:
-                    self.__queueEnable = True
-                    self.__queue = BQueue(queueLen)
-                    self.__threadEvent = Event()
-                    self.__threadReader = Thread(target=self.__ChannelReaderThreadFunc, name="ch_reader", daemon=True)
-                    self.__threadReader.start()
-                self.__reader = DataReader(participant, topic, qos, Listener(on_data_available=self.__OnDataAvailable))
-
-        def Read(self, timeout: float = None):
-            sample = None
-            try:
-                if timeout is None:
-                    sample = self.__reader.take_one()
+        """
+        " internal class __Reader
+        """
+        class __Reader:
+            def __init__(self, logger: logging.Logger = None):
+                self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+                self.__reader = None
+                self.__handler = None
+                self.__queue = None
+                self.__queueEnable = False
+                self.__threadEvent = None
+                self.__threadReader = None
+            
+            def Init(self, participant: DomainParticipant, topic: Topic, qos: Qos = None, handler: Callable = None, queueLen: int = 0):
+                if handler is None:
+                    self.__reader = DataReader(participant, topic, qos)
                 else:
-                    sample = self.__reader.take_one(timeout=duration(seconds=timeout))
-            except DDSException as e:
-                self.logger.error("[Reader] catch DDSException msg:", e.msg)
-            except TimeoutError as e:
-                self.logger.error("[Reader] take sample timeout")
-            except:
-                self.logger.error("[Reader] take sample error")
+                    self.__handler = handler
+                    if queueLen > 0:
+                        self.__queueEnable = True
+                        self.__queue = BQueue(queueLen)
+                        self.__threadEvent = Event()
+                        self.__threadReader = Thread(target=self.__ChannelReaderThreadFunc, name="ch_reader", daemon=True)
+                        self.__threadReader.start()
+                    self.__reader = DataReader(participant, topic, qos, Listener(on_data_available=self.__OnDataAvailable))
 
-            return sample
+            def Read(self, timeout: float = None):
+                sample = None
+                try:
+                    if timeout is None:
+                        sample = self.__reader.take_one()
+                    else:
+                        sample = self.__reader.take_one(timeout=duration(seconds=timeout))
+                except DDSException as e:
+                    self.logger.error("[Reader] catch DDSException msg:", e.msg)
+                except TimeoutError as e:
+                    self.logger.error("[Reader] take sample timeout")
+                except:
+                    self.logger.error("[Reader] take sample error")
 
-        def Close(self):
-            if self.__reader is not None:
-                del self.__reader
+                return sample
 
-            if self.__queueEnable:
-                self.__threadEvent.set()
-                self.__queue.Interrupt()
-                self.__queue.Clear()
-                self.__threadReader.join()
+            def Close(self):
+                if self.__reader is not None:
+                    del self.__reader
 
-        def __OnDataAvailable(self, reader: DataReader):
-            samples = []
-            try:
-                samples = reader.take(1)
-            except DDSException as e:
-                self.logger.error("[Reader] catch DDSException error. msg:", e.msg)
-                return
-            except TimeoutError as e:
-                self.logger.error("[Reader] take sample timeout")
-                return
-            except:
-                self.logger.error("[Reader] take sample error")
-                return
+                if self.__queueEnable:
+                    self.__threadEvent.set()
+                    self.__queue.Interrupt()
+                    self.__queue.Clear()
+                    self.__threadReader.join()
 
-            if samples is None:
-                return
+            def __OnDataAvailable(self, reader: DataReader):
+                samples = []
+                try:
+                    samples = reader.take(1)
+                except DDSException as e:
+                    self.logger.error("[Reader] catch DDSException error. msg:", e.msg)
+                    return
+                except TimeoutError as e:
+                    self.logger.error("[Reader] take sample timeout")
+                    return
+                except:
+                    self.logger.error("[Reader] take sample error")
+                    return
 
-            # check invalid sample        
-            sample = samples[0]
-            if isinstance(sample, InvalidSample):
-                return
+                if samples is None:
+                    return
 
-            # do sample
-            if self.__queueEnable:
-                self.__queue.Put(sample)
-            else:
-                self.__handler(sample)
+                # check invalid sample        
+                sample = samples[0]
+                if isinstance(sample, InvalidSample):
+                    return
 
-        def __ChannelReaderThreadFunc(self):
-            while not self.__threadEvent.is_set():
-                sample = self.__queue.Get()
-                if sample is not None:
+                # do sample
+                if self.__queueEnable:
+                    self.__queue.Put(sample)
+                else:
                     self.__handler(sample)
 
+            def __ChannelReaderThreadFunc(self):
+                while not self.__threadEvent.is_set():
+                    sample = self.__queue.Get()
+                    if sample is not None:
+                        self.__handler(sample)
+
+        """
+        " internal class __Writer
+        """
+        class __Writer:
+            def __init__(self, logger: logging.Logger = None):
+                self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+                self.__writer = None
+                self.__publication_matched_count = 0
+            
+            def Init(self, participant: DomainParticipant, topic: Topic, qos: Qos = None):
+                self.__writer = DataWriter(participant, topic, qos, Listener(on_publication_matched=self.__OnPublicationMatched))
+                time.sleep(0.2)
+
+            def Write(self, sample: Any, timeout: float = None):
+                waitsec = 0.0 if timeout is None else timeout
+
+                # check publication_matched_count
+                while waitsec > 0.0 and self.__publication_matched_count == 0:
+                    time.sleep(0.1)
+                    waitsec = waitsec - 0.1
+                    # self.logger.debug(time.time())
+
+                # check waitsec
+                if timeout is not None and waitsec <= 0.0:
+                    # self.logger.debug("Write Timeout")
+                    return False
+
+                # self.logger.debug(f"DDS data to write: {sample}")
+                try:
+                    self.__writer.write(sample)
+                except DDSException as e:
+                    self.logger.error("[Writer] catch DDSException error. msg:", e.msg)
+                    return False
+                except Exception as e:
+                    self.logger.error("[Writer] write sample error. msg:", e.args())
+                    return False
+
+                return True
+            
+            def Close(self):
+                if self.__writer is not None:
+                    del self.__writer
+            
+            def __OnPublicationMatched(self, writer: DataWriter, status: dds_c_t.publication_matched_status):
+                self.__publication_matched_count = status.current_count
+
+
+        # channel __init__
+        def __init__(self, participant: DomainParticipant, name: str, type: Any, qos: Qos = None, logger: logging.Logger = None):
+            self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
+            self.__reader = self.__Reader(self.logger)
+            self.__writer = self.__Writer(self.logger)
+            self.__participant = participant
+            self.__topic = Topic(self.__participant, name, type, qos)
+
+        def SetWriter(self, qos: Qos = None):
+            self.__writer.Init(self.__participant, self.__topic, qos)
+
+        def SetReader(self, qos: Qos = None, handler: Callable = None, queueLen: int = 0):
+            self.__reader.Init(self.__participant, self.__topic, qos, handler, queueLen)
+            
+        def Write(self, sample: Any, timeout: float = None):
+            return self.__writer.Write(sample, timeout)
+
+        def Read(self, timeout: float = None):
+            return self.__reader.Read(timeout)
+
+        def CloseReader(self):
+            self.__reader.Close()
+
+        def CloseWriter(self):
+            self.__writer.Close()
+
+
     """
-    " internal class __Writer
+    " class ChannelFactory
     """
-    class __Writer:
+    class ChannelFactory(Singleton):
+        channel_name = 'DDS'
+        __domain = None
+        __participant = None
+        __qos = None
+
         def __init__(self, logger: logging.Logger = None):
             self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
-            self.__writer = None
-            self.__publication_matched_count = 0
-        
-        def Init(self, participant: DomainParticipant, topic: Topic, qos: Qos = None):
-            self.__writer = DataWriter(participant, topic, qos, Listener(on_publication_matched=self.__OnPublicationMatched))
-            time.sleep(0.2)
+            super().__init__()
+            self.dataclass = IDLDataClass()
 
-        def Write(self, sample: Any, timeout: float = None):
-            waitsec = 0.0 if timeout is None else timeout
+        def Init(self, id: int, networkInterface: str = None, qos: Qos = None):
+            config = None
+            # choose config
+            if networkInterface is None:
+                config = ChannelConfigAutoDetermine
+            else:
+                config = ChannelConfigHasInterface.replace('$__IF_NAME__$', networkInterface)
 
-            # check publication_matched_count
-            while waitsec > 0.0 and self.__publication_matched_count == 0:
-                time.sleep(0.1)
-                waitsec = waitsec - 0.1
-                # self.logger.debug(time.time())
-
-            # check waitsec
-            if timeout is not None and waitsec <= 0.0:
-                # self.logger.debug("Write Timeout")
-                return False
-
-            # self.logger.debug(f"DDS data to write: {sample}")
             try:
-                self.__writer.write(sample)
+                self.__domain = Domain(id, config)
             except DDSException as e:
-                self.logger.error("[Writer] catch DDSException error. msg:", e.msg)
+                self.logger.error("[ChannelFactory] create domain error. msg:", e.msg)
                 return False
-            except Exception as e:
-                self.logger.error("[Writer] write sample error. msg:", e.args())
+            except:
+                self.logger.error("[ChannelFactory] create domain error.")
                 return False
+
+            try:
+                self.__participant = DomainParticipant(id)
+            except DDSException as e:
+                self.logger.error("[ChannelFactory] create domain participant error. msg:", e.msg)
+                return False
+            except:
+                self.logger.error("[ChannelFactory] create domain participant error")
+                return False
+
+            self.__qos = qos
 
             return True
-        
+
+        def CreateChannel(self, name: str, type: Any):
+            return DDSCommunicator.Channel(self.__participant, name, type, self.__qos, self.logger)
+
+        def CreateSendChannel(self, name: str, type: Any):
+            channel = self.CreateChannel(name, type)
+            channel.SetWriter(None)
+            return channel
+
+        def CreateRecvChannel(self, name: str, type: Any, handler: Callable = None, queueLen: int = 0):
+            channel = self.CreateChannel(name, type)
+            channel.SetReader(None, handler, queueLen)
+            return channel
+
+
+    """
+    " class ChannelPublisher
+    """
+    class ChannelPublisher:
+        def __init__(self, name: str, type: Any):
+            factory = DDSCommunicator.ChannelFactory()
+            self.__channel = factory.CreateChannel(name, type)
+            self.__inited = False
+
+        def Init(self):
+            if not self.__inited:
+                self.__channel.SetWriter(None)
+                self.__inited = True
+
         def Close(self):
-            if self.__writer is not None:
-                del self.__writer
-        
-        def __OnPublicationMatched(self, writer: DataWriter, status: dds_c_t.publication_matched_status):
-            self.__publication_matched_count = status.current_count
+            self.__channel.CloseWriter()
+            self.__inited = False
 
+        def Write(self, sample: Any, timeout: float = None):
+            return self.__channel.Write(sample, timeout)
 
-    # channel __init__
-    def __init__(self, participant: DomainParticipant, name: str, type: Any, qos: Qos = None, logger: logging.Logger = None):
-        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
-        self.__reader = self.__Reader(self.logger)
-        self.__writer = self.__Writer(self.logger)
-        self.__participant = participant
-        self.__topic = Topic(self.__participant, name, type, qos)
+    """
+    " class ChannelSubscriber
+    """
+    class ChannelSubscriber:
+        def __init__(self, name: str, type: Any):
+            factory = DDSCommunicator.ChannelFactory()
+            self.__channel = factory.CreateChannel(name, type)
+            self.__inited = False
 
-    def SetWriter(self, qos: Qos = None):
-        self.__writer.Init(self.__participant, self.__topic, qos)
+        def Init(self, handler: Callable = None, queueLen: int = 0):
+            if not self.__inited:
+                self.__channel.SetReader(None, handler, queueLen)
+                self.__inited = True
 
-    def SetReader(self, qos: Qos = None, handler: Callable = None, queueLen: int = 0):
-        self.__reader.Init(self.__participant, self.__topic, qos, handler, queueLen)
-        
-    def Write(self, sample: Any, timeout: float = None):
-        return self.__writer.Write(sample, timeout)
+        def Close(self):
+            self.__channel.CloseReader()
+            self.__inited = False
 
-    def Read(self, timeout: float = None):
-        return self.__reader.Read(timeout)
-
-    def CloseReader(self):
-        self.__reader.Close()
-
-    def CloseWriter(self):
-        self.__writer.Close()
-
-
-"""
-" class ChannelFactory
-"""
-class DDSChannelFactory(Singleton):
-    channel_name = 'DDS'
-    __domain = None
-    __participant = None
-    __qos = None
-
-    def __init__(self, logger: logging.Logger = None):
-        self.logger = logger.getChild(self.__class__.__name__) if logger else logging.getLogger(self.__class__.__name__)
-        super().__init__()
-        self.dataclass = IDLDataClass()
-
-    def Init(self, id: int, networkInterface: str = None, qos: Qos = None):
-        config = None
-        # choose config
-        if networkInterface is None:
-            config = ChannelConfigAutoDetermine
-        else:
-            config = ChannelConfigHasInterface.replace('$__IF_NAME__$', networkInterface)
-
-        try:
-            self.__domain = Domain(id, config)
-        except DDSException as e:
-            self.logger.error("[ChannelFactory] create domain error. msg:", e.msg)
-            return False
-        except:
-            self.logger.error("[ChannelFactory] create domain error.")
-            return False
-
-        try:
-            self.__participant = DomainParticipant(id)
-        except DDSException as e:
-            self.logger.error("[ChannelFactory] create domain participant error. msg:", e.msg)
-            return False
-        except:
-            self.logger.error("[ChannelFactory] create domain participant error")
-            return False
-
-        self.__qos = qos
-
-        return True
-
-    def CreateChannel(self, name: str, type: Any):
-        return DDSChannel(self.__participant, name, type, self.__qos, self.logger)
-
-    def CreateSendChannel(self, name: str, type: Any):
-        channel = self.CreateChannel(name, type)
-        channel.SetWriter(None)
-        return channel
-
-    def CreateRecvChannel(self, name: str, type: Any, handler: Callable = None, queueLen: int = 0):
-        channel = self.CreateChannel(name, type)
-        channel.SetReader(None, handler, queueLen)
-        return channel
-
-
-"""
-" class ChannelPublisher
-"""
-class DDSChannelPublisher:
-    def __init__(self, name: str, type: Any):
-        factory = DDSChannelFactory()
-        self.__channel = factory.CreateChannel(name, type)
-        self.__inited = False
-
-    def Init(self):
-        if not self.__inited:
-            self.__channel.SetWriter(None)
-            self.__inited = True
-
-    def Close(self):
-        self.__channel.CloseWriter()
-        self.__inited = False
-
-    def Write(self, sample: Any, timeout: float = None):
-        return self.__channel.Write(sample, timeout)
-
-"""
-" class ChannelSubscriber
-"""
-class DDSChannelSubscriber:
-    def __init__(self, name: str, type: Any):
-        factory = DDSChannelFactory()
-        self.__channel = factory.CreateChannel(name, type)
-        self.__inited = False
-
-    def Init(self, handler: Callable = None, queueLen: int = 0):
-        if not self.__inited:
-            self.__channel.SetReader(None, handler, queueLen)
-            self.__inited = True
-
-    def Close(self):
-        self.__channel.CloseReader()
-        self.__inited = False
-
-    def Read(self, timeout: int = None):
-        return self.__channel.Read(timeout)
+        def Read(self, timeout: int = None):
+            return self.__channel.Read(timeout)
 
 """
 " function ChannelFactoryInitialize. used to intialize channel everenment.
 """
 def DDSChannelFactoryInitialize(domainId: int = 0, networkInterface: str = None):
-    factory = DDSChannelFactory()
+    communicator = DDSCommunicator()
+    factory = communicator.ChannelFactory()
     if not factory.Init(domainId, networkInterface):
         raise Exception("channel factory init error.")
-    return factory
+    return communicator
