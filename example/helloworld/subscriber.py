@@ -1,7 +1,7 @@
 import time
 import sys
 
-from unitree_sdk2py.core.dds.channel import DDSChannelSubscriber, DDSChannelFactoryInitialize
+from unitree_sdk2py.core.dds.channel import DDSChannelFactoryInitialize
 from user_data import *
 
 from unitree_sdk2py.idl.idl_dataclass import IDLDataClass
@@ -31,13 +31,13 @@ if __name__ == "__main__":
     robot = sdk.create_robot(communicator, serialNumber='B42D2000XXXXXXXX')
 
     # Create a subscriber to subscribe the data defined in UserData class
-    sub = DDSChannelSubscriber("topic", UserData)
+    sub = communicator.ChannelSubscriber("topic", UserData)
     sub.Init()
 
     while True:
         msg = sub.Read(timeout=2)
         if msg is not None:
-            robot.logger.info("Subscribe success. msg:", msg)
+            robot.logger.info(f"Subscribe success. msg: {msg}")
         else:
             robot.logger.info("No data subscribed.")
             break

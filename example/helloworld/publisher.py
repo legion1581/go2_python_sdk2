@@ -1,7 +1,7 @@
 import time
 import sys
 
-from unitree_sdk2py.core.dds.channel import DDSChannelPublisher, DDSChannelFactoryInitialize
+from unitree_sdk2py.core.dds.channel import DDSChannelFactoryInitialize
 from user_data import *
 
 from unitree_sdk2py.idl.idl_dataclass import IDLDataClass
@@ -32,18 +32,18 @@ if __name__ == "__main__":
     robot = sdk.create_robot(communicator, serialNumber='B42D2000XXXXXXXX')
 
     # Create a publisher to publish the data defined in UserData class
-    pub = DDSChannelPublisher("topic", UserData)
+    pub = communicator.ChannelPublisher("topic", UserData)
     pub.Init()
 
     for i in range(30):
-        # Create a Userdata message
+        # Create a Userdata message 
         msg = UserData(" ", 0)
         msg.string_data = "Hello world"
         msg.float_data = time.time()
 
         # Publish message
         if pub.Write(msg, 0.5):
-            robot.logger.info("Publish success. msg:", msg)
+            robot.logger.info(f"Publish success. msg: {msg}")
         else:
             robot.logger.info("Waitting for subscriber.")
 
